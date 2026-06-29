@@ -2,94 +2,89 @@ import express from "express";
 import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
-const app = express();
-const PORT = process.env.PORT || 3000;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
-const keyFile = JSON.parse(fs.readFileSync("./keys.json"));
+const app = express();
+
+const keyPath = path.join(__dirname, "keys.json");
+const keyFile = JSON.parse(fs.readFileSync(keyPath, "utf8"));
 
 const freemiumKeys = keyFile.Freemium_KEYS
-    .split(",")
-    .map(x => x.trim());
+  .split(",")
+  .map(x => x.trim());
 
 const premiumKeys = keyFile.Premium_KEYS
-    .split(",")
-    .map(x => x.trim());
+  .split(",")
+  .map(x => x.trim());
 
-const endpointRoot = "./Endpoints";
+const endpointRoot = path.join(__dirname, "Endpoints");
 
 function register(folder, type) {
+  const dir = path.join(endpointRoot, folder);
 
-    const dir = path.join(endpointRoot, folder);
+  if (!fs.existsSync(dir)) return;
 
-    if (!fs.existsSync(dir))
-        return;
+  for (const file of fs.readdirSync(dir)) {
+    if (!file.endsWith(".js")) continue;
 
-    for (const file of fs.readdirSync(dir)) {
+    const filename = file.replace(".js", "");
 
-        if (!file.endsWith(".js"))
-            continue;
+    app.get(`/${filename}`, async (req, res) => {
+      const { prompt, key } = req.query;
 
-        const filename = file.replace(".js", "");
-
-        app.get(`/${filename}`, async (req, res) => {
-
-            const prompt = req.query.prompt;
-            const key = req.query.key;
-
-            if (!prompt)
-                return res.json({
-                    status: "offline",
-                    error: "Missing prompt"
-                });
-
-            if (!key)
-                return res.json({
-                    status: "offline",
-                    error: "Missing key"
-                });
-
-            const valid = type == "freemium"
-                ? freemiumKeys.includes(key)
-                : premiumKeys.includes(key);
-
-            if (!valid)
-                return res.json({
-                    status: "offline",
-                    error: "Invalid API Key"
-                });
-
-            try {
-
-                const endpoint = await import(`./Endpoints/${folder}/${file}`);
-
-                const response = await endpoint.default(prompt);
-
-                res.json({
-                    status: "online",
-                    response
-                });
-
-            } catch (err) {
-
-                res.json({
-                    status: "offline",
-                    error: err.message
-                });
-
-            }
-
+      if (!prompt)
+        return res.json({
+          status: "offline",
+          error: "Missing prompt"
         });
 
-    }
+      if (!key)
+        return res.json({
+          status: "offline",
+          error: "Missing key"
+        });
 
+      const valid =
+        type === "freemium"
+          ? freemiumKeys.includes(key)
+          : premiumKeys.includes(key);
+
+      if (!valid)
+        return res.json({
+          status: "offline",
+          error: "Invalid API Key"
+        });
+
+      try {
+        const endpoint = await import(
+          `./Endpoints/${folder}/${file}`
+        );
+
+        const response = await endpoint.default(prompt);
+
+        res.json({
+          status: "online",
+          response
+        });
+      } catch (err) {
+        console.error(err);
+
+        res.status(500).json({
+          status: "offline",
+          error: err.message
+        });
+      }
+    });
+  }
 }
 
 register("freemium", "freemium");
 register("premium", "premium");
 
-app.listen(PORT, () => {
-    console.log(`Server running on ${PORT}`);
-});
+// DO NOT app.listen() on Vercel
+export default app;
