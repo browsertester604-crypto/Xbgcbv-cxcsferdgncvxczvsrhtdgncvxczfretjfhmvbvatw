@@ -46,7 +46,7 @@ function register(folder, type) {
       if (!key)
         return res.json({
           status: "offline",
-          error: "Missing key"
+          error: "Join to the Official Server for the Keys"
         });
 
       const valid =
