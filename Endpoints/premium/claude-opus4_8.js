@@ -56,7 +56,7 @@ export default async function(prompt) {
 
     const completion = await openai.chat.completions.create({
 
-        model: "mistralai/mixtral-8x7b-instruct-v0.1",
+        model: process.env.AI_API,
 
         messages: [
             {
